@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Movie Review Analyzer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .loader { border-top-color: #3498db; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans antialiased">
+
+    <div class="container mx-auto p-4 sm:p-8 max-w-4xl">
+
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-800">Movie Review Analyzer</h1>
+            <p class="text-gray-600 mt-2">Enter a movie title to analyze audience sentiment using the TMDb API.</p>
+        </header>
+
+        <div class="bg-white p-6 rounded-lg shadow-md">
+            <div class="flex flex-col sm:flex-row gap-4">
+                <!-- UPDATED: Input type is now 'text' for a movie title -->
+                <input type="text" id="movie-title-input" placeholder="Enter movie title (e.g., Inception)" class="flex-grow p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
+                <button id="analyze-btn" class="bg-blue-600 text-white font-bold py-3 px-6 rounded-md hover:bg-blue-700 transition duration-300">Analyze Reviews</button>
+            </div>
+        </div>
+
+        <div id="results-section" class="mt-8 bg-white p-6 rounded-lg shadow-md hidden">
+            <div id="loader" class="text-center hidden my-8">
+                <div class="loader ease-linear rounded-full border-8 border-t-8 border-gray-200 h-24 w-24 mx-auto"></div>
+                <p class="mt-4 text-gray-600">Fetching reviews and analyzing...</p>
+            </div>
+            <div id="error-message" class="text-center hidden my-8 p-4 bg-red-100 text-red-700 rounded-md"></div>
+            <div id="summary" class="text-center hidden">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">Analysis Complete</h2>
+                <div class="max-w-xs mx-auto"><canvas id="sentiment-chart"></canvas></div>
+                <p id="summary-text" class="mt-4 text-gray-700"></p>
+            </div>
+            <div id="details" class="mt-8 hidden">
+                <h3 class="text-xl font-semibold text-gray-800 mb-4">Fetched Reviews</h3>
+                <div id="reviews-container" class="space-y-4 max-h-96 overflow-y-auto pr-4"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const movieTitleInput = document.getElementById('movie-title-input');
+        const analyzeBtn = document.getElementById('analyze-btn');
+        const resultsSection = document.getElementById('results-section');
+        const loader = document.getElementById('loader');
+        const errorMessage = document.getElementById('error-message');
+        const summary = document.getElementById('summary');
+        const details = document.getElementById('details');
+        const reviewsContainer = document.getElementById('reviews-container');
+        const summaryText = document.getElementById('summary-text');
+        const chartCanvas = document.getElementById('sentiment-chart');
+        let sentimentChart = null;
+
+        analyzeBtn.addEventListener('click', async () => {
+            // UPDATED: Get movie title from the new input field
+            const movie_title = movieTitleInput.value;
+            if (!movie_title) {
+                alert('Please enter a movie title.');
+                return;
+            }
+
+            resultsSection.classList.remove('hidden');
+            loader.classList.remove('hidden');
+            errorMessage.classList.add('hidden');
+            summary.classList.add('hidden');
+            details.classList.add('hidden');
+            reviewsContainer.innerHTML = '';
+            if (sentimentChart) sentimentChart.destroy();
+
+            try {
+                const response = await fetch('/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    // UPDATED: Send the movie_title to the backend
+                    body: JSON.stringify({ movie_title: movie_title }),
+                });
+
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'An unknown error occurred.');
+                
+                loader.classList.add('hidden');
+                summary.classList.remove('hidden');
+                details.classList.remove('hidden');
+
+                summaryText.textContent = `Analyzed ${data.total_reviews} reviews: ${data.positive_count} Positive and ${data.negative_count} Negative.`;
+
+                sentimentChart = new Chart(chartCanvas, {
+                    type: 'pie',
+                    data: {
+                        labels: ['Positive', 'Negative'],
+                        datasets: [{
+                            data: [data.positive_count, data.negative_count],
+                            backgroundColor: ['#22c55e', '#ef4444'],
+                            hoverOffset: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: { legend: { position: 'top' }, title: { display: true, text: 'Sentiment Distribution' } }
+                    }
+                });
+
+                data.reviews.forEach(review => {
+                    const sentimentColor = review.sentiment === 'Positive' ? 'border-green-500' : 'border-red-500';
+                    const reviewElement = document.createElement('div');
+                    reviewElement.className = `p-4 border-l-4 ${sentimentColor} bg-gray-50 rounded-md`;
+                    reviewElement.textContent = review.text;
+                    reviewsContainer.appendChild(reviewElement);
+                });
+
+            } catch (error) {
+                loader.classList.add('hidden');
+                errorMessage.textContent = `Error: ${error.message}`;
+                errorMessage.classList.remove('hidden');
+            }
+        });
+    </script>
+</body>
+</html>

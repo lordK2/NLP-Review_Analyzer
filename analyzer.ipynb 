@@ -1,0 +1,171 @@
+# ==============================================================================
+# FINAL MODEL TRAINING SCRIPT - MOVIE REVIEW EDITION
+# Purpose: To train a sentiment analysis model on the IMDb movie reviews dataset
+#          and save the trained model and vectorizer to disk for our web app.
+# ==============================================================================
+
+# --- 1. Import all the stuff we need ---
+# For handling data, like reading the CSV
+import pandas as pd
+# For splitting the data into train/test sets and for the grid search thing
+from sklearn.model_selection import train_test_split, GridSearchCV
+# The tool to turn our text into numbers (vectors)
+from sklearn.feature_extraction.text import TfidfVectorizer
+# The actual machine learning model we're gonna use
+from sklearn.linear_model import LogisticRegression
+# This is for saving our finished model to a file
+import joblib
+
+# Just to make sure everything imported okay
+print("All libraries are loaded and ready to go!")
+print("-" * 30)
+
+
+# --- 2. Load and Prepare the NEW Dataset ---
+# Gotta get the data from the CSV file. Hope it's in the right folder lol.
+try:
+    # Let's read the big CSV file into a pandas DataFrame
+    raw_dataframe = pd.read_csv('IMDB Dataset.csv')
+    print("Successfully loaded 'IMDB Dataset.csv'.")
+    # Let's see what the first few rows look like
+    print("Here's a quick peek at the raw data:")
+    print(raw_dataframe.head())
+    print("-" * 30)
+
+    # The 'sentiment' column has words ('positive', 'negative'), but the model needs numbers.
+    # So, we need to convert them. Let's make 'positive' = 1 and 'negative' = 0.
+    # I'll create an empty list first, then loop through the sentiments.
+    
+    numeric_sentiments = []
+    for sentiment_value in raw_dataframe['sentiment']:
+        if sentiment_value == 'positive':
+            numeric_sentiments.append(1)
+        else:
+            numeric_sentiments.append(0)
+    
+    # Now, add this new list as a column to our dataframe.
+    raw_dataframe['sentiment_numeric'] = numeric_sentiments
+    print("Converted sentiment words to numbers (1s and 0s).")
+    print("Here's the data with the new numeric sentiment column:")
+    print(raw_dataframe.head())
+    print("-" * 30)
+    
+    # The columns are named 'review' and 'sentiment'. The rest of my code uses 'Text' and 'sentiment'.
+    # I'll make a new, clean dataframe with just the columns I need and the right names.
+    # This feels safer than messing with the original one.
+    
+    # Create a dictionary with the data we want
+    clean_data = {
+        'Text': raw_dataframe['review'],
+        'sentiment': raw_dataframe['sentiment_numeric']
+    }
+    # Create the final dataframe from this dictionary
+    df = pd.DataFrame(clean_data)
+
+    print("Final clean DataFrame is ready.")
+    print(f"We are working with a total of {len(df)} reviews.")
+    print("-" * 30)
+
+except FileNotFoundError:
+    # If the file isn't there, print an error and stop.
+    print("!!! ERROR !!!")
+    print("Could not find 'IMDB Dataset.csv'. Make sure you downloaded it and put it in the same folder as this notebook.")
+    exit()
+
+
+# --- 3. Split Data for Training and Testing ---
+# We need to separate our data. The model trains on one part, and we test it on another part it's never seen.
+# This shows us if it actually learned anything or just memorized the answers.
+
+# 'X' is the input (the review text)
+# 'y' is the output (the sentiment, 0 or 1)
+X = df['Text']
+y = df['sentiment']
+
+# Use the scikit-learn function to split it all up.
+# test_size=0.2 means 20% of the data is saved for testing. 80% is for training.
+# random_state=42 just makes sure the split is the same every time we run this, so our results are consistent.
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Let's print out the sizes to double-check everything looks right.
+print("Data has been split into training and testing sets.")
+print(f"Number of training reviews: {len(X_train)}")
+print(f"Number of testing reviews: {len(X_test)}")
+print("-" * 30)
+
+
+# --- 4. Vectorize the Text Data (Turn words into numbers) ---
+# The computer doesn't understand words, so we use TF-IDF to convert sentences into numerical vectors.
+# It basically scores words based on how important they are.
+print("Setting up the TF-IDF Vectorizer...")
+# stop_words='english' -> ignores common words like 'the', 'a', 'is'
+# max_features=10000 -> only looks at the top 10,000 most common words to save memory
+vectorizer_tool = TfidfVectorizer(stop_words='english', max_features=10000)
+
+# First, the vectorizer "learns" the vocabulary from our training text.
+print("Learning the vocabulary from the training data...")
+vectorizer_tool.fit(X_train)
+
+# Now, we transform the training text into a big matrix of numbers.
+print("Transforming the training text into vectors...")
+X_train_vec = vectorizer_tool.transform(X_train)
+print("Training data has been successfully vectorized.")
+print("-" * 30)
+
+
+# --- 5. Find the Best Model with GridSearchCV ---
+# We're using Logistic Regression, but it has settings we can tune (hyperparameters).
+# Instead of guessing the best settings, GridSearchCV will test them all for us.
+
+# Create the model instance. max_iter=1000 helps make sure it finishes training.
+the_model = LogisticRegression(max_iter=1000)
+
+# This dictionary holds all the settings we want to test.
+# It will try C=0.1, C=1, C=10, etc.
+parameter_options = {
+    'C': [0.1, 1, 10],
+    'solver': ['saga'] # 'saga' is a good solver for big datasets like this one.
+}
+print("Defined the model and the parameters to test.")
+
+# Now set up the actual GridSearch tool.
+# cv=5 -> 5-fold cross-validation (splits data 5 times to make sure the score is stable)
+# verbose=2 -> prints out a lot of logs so we can see it working
+# n_jobs=-1 -> this tells it to use all available CPU cores to speed things up. Super useful!
+grid_search_tool = GridSearchCV(the_model, parameter_options, cv=5, scoring='accuracy', verbose=2, n_jobs=-1)
+
+print("Starting GridSearchCV to find the best model... This is gonna take a while, go grab a coffee!")
+# This is the line that does all the work. It will train and test all the different combinations.
+grid_search_tool.fit(X_train_vec, y_train)
+
+print("\n... and we're back! GridSearchCV has finished.")
+print("-" * 30)
+
+# Let's see what the best settings were.
+best_settings = grid_search_tool.best_params_
+best_score = grid_search_tool.best_score_
+
+print(f"The best settings it found are: {best_settings}")
+print(f"The best accuracy score it got was: {best_score:.2f}") # .2f formats it to 2 decimal places
+print("-" * 30)
+
+
+# --- 6. Save the Final, ACCURATE Model and Vectorizer ---
+# Now we save our work so the web app can use it without having to retrain every time.
+# The grid_search_tool itself is now our best, fully trained model.
+
+print("Saving the final trained model to 'sentiment_model.pkl'...")
+joblib.dump(grid_search_tool, 'sentiment_model.pkl')
+print("Model saved!")
+
+# We also have to save the vectorizer, because we need it to transform any *new* text
+# in the exact same way the training text was transformed.
+print("Saving the vectorizer to 'vectorizer.pkl'...")
+joblib.dump(vectorizer_tool, 'vectorizer.pkl')
+print("Vectorizer saved!")
+
+
+print("\n==================================================")
+print("✅ ALL DONE! The new, accurate model and vectorizer have been saved.")
+print("Now you can run the 'app.py' file to start the web app and see it in action.")
+print("==================================================")
