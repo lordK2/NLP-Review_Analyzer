@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Local data and secrets
+IMDB Dataset.csv
+.env
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
