@@ -118,6 +118,8 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
+The same tests run automatically on GitHub Actions for every push and pull request.
+
 The tests cover the HTTP routes and their error handling, with TMDb mocked so they run offline without an API key. They also check the label-mapping step of the training script.
 
 ## Project structure
@@ -135,7 +137,9 @@ NLP-Review_Analyzer/
 ├── tests/
 │   ├── test_app.py      # Route and error-handling tests
 │   └── test_train.py    # Data-loading tests
-├── .env.example         # Template for the local .env file
+├── .github/workflows/   # CI: runs the test suite on every push
+├── .env.example        # Template for the local .env file
+├── LICENSE              # MIT License
 ├── requirements.txt     # Runtime dependencies
 ├── requirements-dev.txt # Test dependencies
 └── pytest.ini
@@ -158,4 +162,4 @@ NLP-Review_Analyzer/
 
 ## License
 
-No license has been chosen yet. Add a `LICENSE` file before others reuse this code.
+This project is released under the [MIT License](LICENSE).
