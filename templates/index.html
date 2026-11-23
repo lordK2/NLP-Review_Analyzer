@@ -5,48 +5,66 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Movie Review Analyzer</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
     <style>
-        .loader { border-top-color: #3498db; animation: spin 1s linear infinite; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .spinner {
+            border-top-color: #3498db;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body class="bg-gray-100 font-sans antialiased">
 
-    <div class="container mx-auto p-4 sm:p-8 max-w-4xl">
+    <main class="container mx-auto max-w-4xl p-4 sm:p-8">
 
-        <header class="text-center mb-8">
+        <header class="mb-8 text-center">
             <h1 class="text-4xl font-bold text-gray-800">Movie Review Analyzer</h1>
-            <p class="text-gray-600 mt-2">Enter a movie title to analyze audience sentiment using the TMDb API.</p>
+            <p class="mt-2 text-gray-600">Enter a movie title to see how audiences feel about it, based on TMDb reviews.</p>
         </header>
 
-        <div class="bg-white p-6 rounded-lg shadow-md">
-            <div class="flex flex-col sm:flex-row gap-4">
-                <!-- UPDATED: Input type is now 'text' for a movie title -->
-                <input type="text" id="movie-title-input" placeholder="Enter movie title (e.g., Inception)" class="flex-grow p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
-                <button id="analyze-btn" class="bg-blue-600 text-white font-bold py-3 px-6 rounded-md hover:bg-blue-700 transition duration-300">Analyze Reviews</button>
-            </div>
-        </div>
+        <section class="rounded-lg bg-white p-6 shadow-md">
+            <form id="search-form" class="flex flex-col gap-4 sm:flex-row">
+                <input
+                    type="text"
+                    id="movie-title-input"
+                    placeholder="e.g. Inception"
+                    aria-label="Movie title"
+                    class="flex-grow rounded-md border border-gray-300 p-3 transition focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                <button
+                    type="submit"
+                    id="analyze-btn"
+                    class="rounded-md bg-blue-600 px-6 py-3 font-bold text-white transition duration-300 hover:bg-blue-700"
+                >Analyze Reviews</button>
+            </form>
+        </section>
 
-        <div id="results-section" class="mt-8 bg-white p-6 rounded-lg shadow-md hidden">
-            <div id="loader" class="text-center hidden my-8">
-                <div class="loader ease-linear rounded-full border-8 border-t-8 border-gray-200 h-24 w-24 mx-auto"></div>
+        <section id="results-section" class="mt-8 hidden rounded-lg bg-white p-6 shadow-md">
+            <div id="loader" class="my-8 hidden text-center">
+                <div class="spinner mx-auto h-24 w-24 rounded-full border-8 border-gray-200 border-t-8 ease-linear"></div>
                 <p class="mt-4 text-gray-600">Fetching reviews and analyzing...</p>
             </div>
-            <div id="error-message" class="text-center hidden my-8 p-4 bg-red-100 text-red-700 rounded-md"></div>
-            <div id="summary" class="text-center hidden">
-                <h2 class="text-2xl font-bold text-gray-800 mb-4">Analysis Complete</h2>
-                <div class="max-w-xs mx-auto"><canvas id="sentiment-chart"></canvas></div>
+
+            <div id="error-message" role="alert" class="my-8 hidden rounded-md bg-red-100 p-4 text-center text-red-700"></div>
+
+            <div id="summary" class="hidden text-center">
+                <h2 class="mb-4 text-2xl font-bold text-gray-800">Analysis Complete</h2>
+                <div class="mx-auto max-w-xs"><canvas id="sentiment-chart"></canvas></div>
                 <p id="summary-text" class="mt-4 text-gray-700"></p>
             </div>
+
             <div id="details" class="mt-8 hidden">
-                <h3 class="text-xl font-semibold text-gray-800 mb-4">Fetched Reviews</h3>
-                <div id="reviews-container" class="space-y-4 max-h-96 overflow-y-auto pr-4"></div>
+                <h3 class="mb-4 text-xl font-semibold text-gray-800">Reviews</h3>
+                <div id="reviews-container" class="max-h-96 space-y-4 overflow-y-auto pr-4"></div>
             </div>
-        </div>
-    </div>
+        </section>
+    </main>
 
     <script>
+        const form = document.getElementById('search-form');
         const movieTitleInput = document.getElementById('movie-title-input');
         const analyzeBtn = document.getElementById('analyze-btn');
         const resultsSection = document.getElementById('results-section');
@@ -59,69 +77,80 @@
         const chartCanvas = document.getElementById('sentiment-chart');
         let sentimentChart = null;
 
-        analyzeBtn.addEventListener('click', async () => {
-            // UPDATED: Get movie title from the new input field
-            const movie_title = movieTitleInput.value;
-            if (!movie_title) {
-                alert('Please enter a movie title.');
+        function showOnly(...visible) {
+            for (const el of [loader, errorMessage, summary, details]) {
+                el.classList.toggle('hidden', !visible.includes(el));
+            }
+        }
+
+        function renderResults(data) {
+            summaryText.textContent =
+                `Analyzed ${data.total_reviews} reviews: ${data.positive_count} positive and ${data.negative_count} negative.`;
+
+            if (sentimentChart) sentimentChart.destroy();
+            sentimentChart = new Chart(chartCanvas, {
+                type: 'pie',
+                data: {
+                    labels: ['Positive', 'Negative'],
+                    datasets: [{
+                        data: [data.positive_count, data.negative_count],
+                        backgroundColor: ['#22c55e', '#ef4444'],
+                        hoverOffset: 4,
+                    }],
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'top' },
+                        title: { display: true, text: 'Sentiment Distribution' },
+                    },
+                },
+            });
+
+            reviewsContainer.replaceChildren(...data.reviews.map(review => {
+                const item = document.createElement('div');
+                const border = review.sentiment === 'Positive' ? 'border-green-500' : 'border-red-500';
+                item.className = `rounded-md border-l-4 bg-gray-50 p-4 ${border}`;
+                item.textContent = review.text;
+                return item;
+            }));
+        }
+
+        async function analyze(event) {
+            event.preventDefault();
+            const movieTitle = movieTitleInput.value.trim();
+
+            resultsSection.classList.remove('hidden');
+            if (!movieTitle) {
+                showOnly(errorMessage);
+                errorMessage.textContent = 'Please enter a movie title.';
                 return;
             }
 
-            resultsSection.classList.remove('hidden');
-            loader.classList.remove('hidden');
-            errorMessage.classList.add('hidden');
-            summary.classList.add('hidden');
-            details.classList.add('hidden');
-            reviewsContainer.innerHTML = '';
-            if (sentimentChart) sentimentChart.destroy();
+            analyzeBtn.disabled = true;
+            showOnly(loader);
 
             try {
                 const response = await fetch('/analyze', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    // UPDATED: Send the movie_title to the backend
-                    body: JSON.stringify({ movie_title: movie_title }),
+                    body: JSON.stringify({ movie_title: movieTitle }),
                 });
-
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error || 'An unknown error occurred.');
-                
-                loader.classList.add('hidden');
-                summary.classList.remove('hidden');
-                details.classList.remove('hidden');
 
-                summaryText.textContent = `Analyzed ${data.total_reviews} reviews: ${data.positive_count} Positive and ${data.negative_count} Negative.`;
-
-                sentimentChart = new Chart(chartCanvas, {
-                    type: 'pie',
-                    data: {
-                        labels: ['Positive', 'Negative'],
-                        datasets: [{
-                            data: [data.positive_count, data.negative_count],
-                            backgroundColor: ['#22c55e', '#ef4444'],
-                            hoverOffset: 4
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        plugins: { legend: { position: 'top' }, title: { display: true, text: 'Sentiment Distribution' } }
-                    }
-                });
-
-                data.reviews.forEach(review => {
-                    const sentimentColor = review.sentiment === 'Positive' ? 'border-green-500' : 'border-red-500';
-                    const reviewElement = document.createElement('div');
-                    reviewElement.className = `p-4 border-l-4 ${sentimentColor} bg-gray-50 rounded-md`;
-                    reviewElement.textContent = review.text;
-                    reviewsContainer.appendChild(reviewElement);
-                });
-
+                // Show the canvas before drawing so Chart.js sizes it correctly.
+                showOnly(summary, details);
+                renderResults(data);
             } catch (error) {
-                loader.classList.add('hidden');
                 errorMessage.textContent = `Error: ${error.message}`;
-                errorMessage.classList.remove('hidden');
+                showOnly(errorMessage);
+            } finally {
+                analyzeBtn.disabled = false;
             }
-        });
+        }
+
+        form.addEventListener('submit', analyze);
     </script>
 </body>
 </html>

@@ -1,0 +1,22 @@
+# --- Secrets: never commit these ---
+# Local environment file holding the TMDb API key.
+.env
+.env.*
+!.env.example
+
+# --- Data: the dataset is large and downloaded separately ---
+data/*
+!data/.gitkeep
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# --- Editors and OS ---
+.DS_Store
+.idea/
+.vscode/
+.ipynb_checkpoints/
